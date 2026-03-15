@@ -97,6 +97,50 @@ Stop and remove database volume:
 docker compose down -v
 ```
 
+## CI/CD to GHCR (GitHub Actions)
+
+Workflow files:
+- `.github/workflows/pr-checks.yml`
+- `.github/workflows/main-release.yml`
+
+Behavior:
+- Pull requests to `main`: lint commit messages (Conventional Commits) and run backend/frontend tests + validation.
+- Push to `main`: lint commit messages in push range, run CI, run semantic-release, then build/push Docker images to GHCR.
+
+Semantic-release:
+- Runs only on `main`.
+- Creates GitHub release notes and tags (`vX.Y.Z`) from Conventional Commits.
+- No release is created when commits do not trigger a semantic version bump.
+
+Commit linting:
+- Config file: `commitlint.config.cjs`
+- Accepted types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`, `ci`, `build`, `style`, `revert`
+
+Published image names:
+- `ghcr.io/<owner>/<repo>-backend`
+- `ghcr.io/<owner>/<repo>-frontend`
+
+Common tags:
+- `latest` (every successful push to `main`)
+- `vX.Y.Z` (when semantic-release publishes a new release)
+- `sha-<commit>`
+
+Deploy by pulling from GHCR:
+
+```bash
+export GHCR_OWNER=<github-owner-lowercase>
+export GHCR_REPO=<github-repository-name-lowercase>
+export IMAGE_TAG=latest
+
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+For private packages, login first:
+
+```bash
+echo <github_pat_with_read_packages> | docker login ghcr.io -u <github-username> --password-stdin
+```
+
 ## Usage
 
 - Use the frontend form to input your work hours.
