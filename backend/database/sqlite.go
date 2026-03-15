@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +23,10 @@ var (
 )
 
 func InitDB(dataSourceName string) error {
+	if err := ensureSQLiteDatabaseFile(dataSourceName); err != nil {
+		return err
+	}
+
 	var err error
 	db, err = sql.Open("sqlite3", dataSourceName)
 	if err != nil {
@@ -444,6 +449,40 @@ func ensureColumn(tableName, columnName, columnDefinition string) error {
 	alter := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, columnDefinition)
 	_, err = db.Exec(alter)
 	return err
+}
+
+func ensureSQLiteDatabaseFile(dataSourceName string) error {
+	dsn := strings.TrimSpace(dataSourceName)
+	if dsn == "" {
+		return errors.New("empty database path")
+	}
+	if dsn == ":memory:" || strings.Contains(dsn, "mode=memory") {
+		return nil
+	}
+
+	filePath := dsn
+	if strings.HasPrefix(filePath, "file:") {
+		filePath = strings.TrimPrefix(filePath, "file:")
+	}
+	if qIndex := strings.Index(filePath, "?"); qIndex >= 0 {
+		filePath = filePath[:qIndex]
+	}
+	if filePath == "" || filePath == ":memory:" {
+		return nil
+	}
+
+	dir := filepath.Dir(filePath)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+
+	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 func scanTimeEntry(scanner interface {
