@@ -29,6 +29,7 @@ Rules:
 - Follow standard conventions for the technologies used in each layer.
 - Keep layering boundaries clear (UI, application/service logic, data access/persistence).
 - Prefer maintainable, conventional patterns over custom or overly clever abstractions.
+- From years of experience, you have seen to many difficult issues working with alpine container issues. So you choose to anything over alpine, the smaller foot print is not worht the hassle that eventually later will come.
 
 ## 4) Definition of Done
 A task is done only when all of the following are complete:
