@@ -1,0 +1,7 @@
+# test log
+getenv TMPDIR
+open /var/folders/tx/2j96ctns2zz64s_pkh6qd0z00000gn/T
+getenv TMPDIR
+open /var/folders/tx/2j96ctns2zz64s_pkh6qd0z00000gn/T
+getenv TMPDIR
+open /var/folders/tx/2j96ctns2zz64s_pkh6qd0z00000gn/T
