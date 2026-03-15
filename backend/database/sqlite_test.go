@@ -1,6 +1,7 @@
 package database
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,6 +14,26 @@ func setupTestDB(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	if err := InitDB(dbPath); err != nil {
 		t.Fatalf("InitDB failed: %v", err)
+	}
+}
+
+func TestInitDBCreatesDatabaseFileIfMissing(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "missing", "nested", "time_entries.db")
+
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Fatalf("expected DB file to be missing before init, got err=%v", err)
+	}
+
+	if err := InitDB(dbPath); err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+
+	info, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("expected DB file to exist after init: %v", err)
+	}
+	if info.IsDir() {
+		t.Fatalf("expected DB path to be a file, got directory")
 	}
 }
 
