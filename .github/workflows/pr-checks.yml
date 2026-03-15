@@ -1,0 +1,75 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  commit-lint:
+    name: Lint Commit Messages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate Conventional Commits
+        run: |
+          FROM_SHA="${{ github.event.pull_request.base.sha }}"
+          TO_SHA="${{ github.event.pull_request.head.sha }}"
+          npx --yes @commitlint/cli@19 --from "$FROM_SHA" --to "$TO_SHA" --config commitlint.config.cjs
+
+  ci:
+    name: Test and Validate
+    needs: commit-lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Backend tests
+        working-directory: backend
+        run: go test ./...
+
+      - name: Backend static checks
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: CI=true npm test -- --watch=false
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
