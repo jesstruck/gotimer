@@ -76,6 +76,11 @@ Example request body:
 }
 ```
 
+`end_time` is optional for manual entries.
+- When `end_time` is omitted, an open entry is created (`is_open: true` in responses).
+- Open entries are persisted so users can save/start in the morning and close the entry later by updating with an `end_time`.
+- Open entries are excluded from weekly/monthly summary totals until closed.
+
 Accepted time formats:
 - RFC3339 (for example `2026-03-14T09:00:00Z`)
 - `YYYY-MM-DD HH:MM[:SS]`

@@ -146,6 +146,10 @@ export function buildMonthlyTotals(allEntries: TimeEntry[], monthBase: Date = ne
   let monthTotal = 0;
 
   allEntries.forEach((entry) => {
+    if (entry.is_open) {
+      return;
+    }
+
     const start = new Date(entry.start_time);
     if (Number.isNaN(start.getTime())) {
       return;

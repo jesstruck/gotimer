@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { TimeEntry, TimeEntryPayload } from "../types";
 import {
   formatDateUTC,
-  formatElapsedMs,
   formatDuration,
   isoToUTCDateInput,
   isoToUTCTimeInput,
@@ -17,10 +16,9 @@ import {
   rowRoundedTotal,
 } from "../utils/weekPlanner";
 
-type RunningTimer = {
-  date: string;
-  startedAtMs: number;
-} | null;
+type SaveOptions = {
+  auto: boolean;
+};
 
 async function parseJSON(response: Response): Promise<any> {
   if (!response.ok) {
@@ -41,14 +39,15 @@ async function parseJSON(response: Response): Promise<any> {
   return response.json();
 }
 
+function isValidTimeInput(value: string): boolean {
+  return /^\d{2}:\d{2}$/.test(value);
+}
 
 const WeekPlanner: React.FC = () => {
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const weekTemplate = useMemo(() => buildWeekRows(weekOffset), [weekOffset]);
   const [rows, setRows] = useState<PlannerRow[]>(weekTemplate);
   const [allEntries, setAllEntries] = useState<TimeEntry[]>([]);
-  const [runningTimer, setRunningTimer] = useState<RunningTimer>(null);
-  const [tick, setTick] = useState<number>(Date.now());
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [message, setMessage] = useState<string>("");
@@ -73,14 +72,6 @@ const WeekPlanner: React.FC = () => {
   const totals = useMemo(() => {
     return buildMonthlyTotals(allEntries);
   }, [allEntries]);
-
-  useEffect(() => {
-    if (!runningTimer) {
-      return;
-    }
-    const id = window.setInterval(() => setTick(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [runningTimer]);
 
   const loadWeekEntries = async (): Promise<void> => {
     setBusy(true);
@@ -121,7 +112,7 @@ const WeekPlanner: React.FC = () => {
             ...row,
             entryId: entry.id,
             startTime: isoToUTCTimeInput(entry.start_time),
-            endTime: isoToUTCTimeInput(entry.end_time),
+            endTime: entry.is_open ? "" : isoToUTCTimeInput(entry.end_time),
             lunchDuration: entry.lunch_duration,
           };
         })
@@ -137,11 +128,6 @@ const WeekPlanner: React.FC = () => {
     loadWeekEntries();
   }, [weekTemplate]);
 
-  useEffect(() => {
-    // Week changes reset active in-memory timer assignment for clarity.
-    setRunningTimer(null);
-  }, [weekOffset]);
-
   const updateRow = (date: string, patch: Partial<PlannerRow>): void => {
     setRows((prevRows) => prevRows.map((row) => (row.date === date ? { ...row, ...patch } : row)));
   };
@@ -150,33 +136,50 @@ const WeekPlanner: React.FC = () => {
     setMessage("");
     setError("");
     const nowTime = nowUTCTimeInput();
-    setRunningTimer({ date, startedAtMs: Date.now() });
+    const existingRow = rows.find((row) => row.date === date);
+    if (!existingRow) {
+      return;
+    }
+    const updatedRow = { ...existingRow, startTime: nowTime, endTime: "" };
     updateRow(date, { startTime: nowTime, endTime: "" });
+    void saveRow(updatedRow, { auto: true });
   };
 
   const handleStop = (date: string): void => {
     setMessage("");
     setError("");
     const nowTime = nowUTCTimeInput();
-    updateRow(date, { endTime: nowTime });
-    setRunningTimer((prev) => (prev?.date === date ? null : prev));
+    const existingRow = rows.find((row) => row.date === date);
+    if (existingRow) {
+      const updatedRow = { ...existingRow, endTime: nowTime };
+      updateRow(date, { endTime: nowTime });
+      void saveRow(updatedRow, { auto: true });
+    }
   };
 
-  const saveRow = async (row: PlannerRow): Promise<void> => {
+  const saveRow = async (row: PlannerRow, options?: SaveOptions): Promise<void> => {
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      if (!row.startTime || !row.endTime) {
-        throw new Error("Start and end time are required to save a day.");
+      if (!row.startTime) {
+        throw new Error("Start time is required to save a day.");
+      }
+      if (!isValidTimeInput(row.startTime)) {
+        throw new Error("Start time must use HH:mm.");
+      }
+      if (row.endTime && !isValidTimeInput(row.endTime)) {
+        throw new Error("End time must use HH:mm.");
       }
 
       const payload: TimeEntryPayload = {
         date: row.date,
         start_time: row.startTime,
-        end_time: row.endTime,
         lunch_duration: row.lunchDuration,
       };
+      if (row.endTime) {
+        payload.end_time = row.endTime;
+      }
 
       if (row.entryId) {
         const response = await fetch(`/api/time-entries/${row.entryId}`, {
@@ -195,12 +198,25 @@ const WeekPlanner: React.FC = () => {
       }
 
       await loadWeekEntries();
-      setMessage(`Saved ${row.weekday}.`);
+      setMessage(options?.auto ? `Auto-saved ${row.weekday}.` : `Saved ${row.weekday}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save day.");
     } finally {
       setBusy(false);
     }
+  };
+
+  const maybeAutoSave = (row: PlannerRow): void => {
+    if (busy) {
+      return;
+    }
+    if (!isValidTimeInput(row.startTime)) {
+      return;
+    }
+    if (row.endTime && !isValidTimeInput(row.endTime)) {
+      return;
+    }
+    void saveRow(row, { auto: true });
   };
 
   const deleteRow = async (row: PlannerRow): Promise<void> => {
@@ -225,8 +241,6 @@ const WeekPlanner: React.FC = () => {
     }
   };
 
-  const runningElapsed = runningTimer ? formatElapsedMs(tick - runningTimer.startedAtMs) : "00:00:00";
-
   return (
     <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "16px" }}>
       <h1>{weekTitle}</h1>
@@ -242,7 +256,7 @@ const WeekPlanner: React.FC = () => {
         </button>
         <small>{weekNumberLabel}</small>
       </div>
-      <p>Only Monday-Sunday is shown. Enter start/end/lunch or use per-day start/stop, then save.</p>
+      <p>Only Monday-Sunday is shown. Start/end is auto-saved.</p>
       {error && <p style={{ color: "#b00020" }}>{error}</p>}
       {message && <p style={{ color: "#0b6f36" }}>{message}</p>}
 
@@ -256,13 +270,14 @@ const WeekPlanner: React.FC = () => {
             <th style={{ textAlign: "left", padding: "8px" }}>Lunch (min)</th>
             <th style={{ textAlign: "left", padding: "8px" }}>Timer</th>
             <th style={{ textAlign: "left", padding: "8px" }}>Total</th>
-            <th style={{ textAlign: "left", padding: "8px" }}>Save</th>
             <th style={{ textAlign: "left", padding: "8px" }}>Delete</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
-            const isRunning = runningTimer?.date === row.date;
+            const hasStartTime = isValidTimeInput(row.startTime);
+            const hasEndTime = isValidTimeInput(row.endTime);
+            const showStop = hasStartTime && !hasEndTime;
             const total = rowRoundedTotal(row);
             return (
               <tr key={row.date} style={{ borderBottom: "1px solid #eee" }}>
@@ -272,14 +287,22 @@ const WeekPlanner: React.FC = () => {
                   <input
                     type="time"
                     value={row.startTime}
-                    onChange={(event) => updateRow(row.date, { startTime: event.target.value })}
+                    onChange={(event) => {
+                      const nextRow = { ...row, startTime: event.target.value };
+                      updateRow(row.date, { startTime: event.target.value });
+                      maybeAutoSave(nextRow);
+                    }}
                   />
                 </td>
                 <td style={{ padding: "8px" }}>
                   <input
                     type="time"
                     value={row.endTime}
-                    onChange={(event) => updateRow(row.date, { endTime: event.target.value })}
+                    onChange={(event) => {
+                      const nextRow = { ...row, endTime: event.target.value };
+                      updateRow(row.date, { endTime: event.target.value });
+                      maybeAutoSave(nextRow);
+                    }}
                   />
                 </td>
                 <td style={{ padding: "8px" }}>
@@ -295,18 +318,15 @@ const WeekPlanner: React.FC = () => {
                   />
                 </td>
                 <td style={{ padding: "8px" }}>
-                  {isRunning ? (
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <button type="button" onClick={() => handleStop(row.date)} disabled={busy}>
-                        Stop
-                      </button>
-                      <span>{runningElapsed}</span>
-                    </div>
+                  {showStop ? (
+                    <button type="button" onClick={() => handleStop(row.date)} disabled={busy}>
+                      Stop
+                    </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => handleStart(row.date)}
-                      disabled={busy || Boolean(runningTimer)}
+                      disabled={busy}
                     >
                       Start
                     </button>
@@ -314,11 +334,6 @@ const WeekPlanner: React.FC = () => {
                 </td>
                 <td style={{ padding: "8px" }}>
                   {total === null ? "-" : `${formatDuration(total)} (${(total / 60).toFixed(2)}h)`}
-                </td>
-                <td style={{ padding: "8px" }}>
-                  <button type="button" onClick={() => saveRow(row)} disabled={busy}>
-                    Save
-                  </button>
                 </td>
                 <td style={{ padding: "8px" }}>
                   <button type="button" onClick={() => deleteRow(row)} disabled={busy}>
