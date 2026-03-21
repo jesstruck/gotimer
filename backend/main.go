@@ -30,6 +30,8 @@ func main() {
 
 	r.HandleFunc("/api/summaries/weekly", handlers.GetWeeklySummary).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/summaries/monthly", handlers.GetMonthlySummary).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/preferences/theme", handlers.GetThemePreference).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/preferences/theme", handlers.UpdateThemePreference).Methods("PUT", "OPTIONS")
 
 	// Backward-compatible alias for old frontend usage.
 	r.HandleFunc("/api/time-entries/summary", handlers.GetSummary).Methods("GET", "OPTIONS")

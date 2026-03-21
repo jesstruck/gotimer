@@ -179,3 +179,35 @@ func TestWeeklyAndMonthlySummaryWithRounding(t *testing.T) {
 		t.Fatalf("expected monthly rounded minutes=930, got %d", monthly.TotalRoundedMins)
 	}
 }
+
+func TestPreferenceRoundTrip(t *testing.T) {
+	setupTestDB(t)
+
+	if _, err := GetPreference("ui_theme"); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound for missing preference, got %v", err)
+	}
+
+	if err := SetPreference("ui_theme", "blue-whale"); err != nil {
+		t.Fatalf("SetPreference failed: %v", err)
+	}
+
+	value, err := GetPreference("ui_theme")
+	if err != nil {
+		t.Fatalf("GetPreference failed: %v", err)
+	}
+	if value != "blue-whale" {
+		t.Fatalf("expected blue-whale, got %s", value)
+	}
+
+	if err := SetPreference("ui_theme", "sea-turtle"); err != nil {
+		t.Fatalf("SetPreference update failed: %v", err)
+	}
+
+	updated, err := GetPreference("ui_theme")
+	if err != nil {
+		t.Fatalf("GetPreference after update failed: %v", err)
+	}
+	if updated != "sea-turtle" {
+		t.Fatalf("expected sea-turtle, got %s", updated)
+	}
+}

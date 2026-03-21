@@ -18,6 +18,11 @@ The frontend proxies API calls to `http://localhost:8080` (see `package.json`).
 
 ## Current UI (Week Planner Only)
 
+- Theme switcher dropdown is shown at the top of planner.
+- Two built-in sea-animal themes are available:
+  - `Sea Turtle` (`🐢`)
+  - `Blue Whale` (`🐋`)
+- Selected theme is persisted through backend preferences API and restored on reload.
 - Exactly seven rows are shown: Monday-Sunday.
 - One-click week navigation controls:
   - Previous Week

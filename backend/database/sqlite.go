@@ -60,6 +60,15 @@ func InitDB(dataSourceName string) error {
 		return err
 	}
 
+	createPreferencesTable := `CREATE TABLE IF NOT EXISTS app_preferences (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);`
+	if _, err := db.Exec(createPreferencesTable); err != nil {
+		return err
+	}
+
 	// Keep compatibility if the DB was created with an earlier schema.
 	if err := ensureColumn("time_entries", "source", "TEXT NOT NULL DEFAULT 'manual'"); err != nil {
 		return err
@@ -96,6 +105,42 @@ func Connect() (*sql.DB, error) {
 
 func GetDB() *sql.DB {
 	return db
+}
+
+func GetPreference(key string) (string, error) {
+	if db == nil {
+		return "", errors.New("database not initialized")
+	}
+	if strings.TrimSpace(key) == "" {
+		return "", errors.New("preference key is required")
+	}
+
+	var value string
+	if err := db.QueryRow(`SELECT value FROM app_preferences WHERE key = ?`, key).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	return value, nil
+}
+
+func SetPreference(key, value string) error {
+	if db == nil {
+		return errors.New("database not initialized")
+	}
+	if strings.TrimSpace(key) == "" {
+		return errors.New("preference key is required")
+	}
+
+	_, err := db.Exec(
+		`INSERT INTO app_preferences(key, value, updated_at) VALUES(?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		key,
+		value,
+		formatTime(time.Now().UTC()),
+	)
+	return err
 }
 
 func CreateTimeEntry(entry *models.TimeEntry) error {

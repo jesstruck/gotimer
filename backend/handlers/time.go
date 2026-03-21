@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"time-tracker-app/backend/database"
@@ -15,6 +16,8 @@ import (
 )
 
 const defaultTimerLunchDuration = 30
+const themePreferenceKey = "ui_theme"
+const defaultThemeID = "sea-turtle"
 
 type apiError struct {
 	Error string `json:"error"`
@@ -28,6 +31,10 @@ type timeEntryPayload struct {
 	StartTimeCamelCase string `json:"startTime"`
 	EndTimeCamelCase   string `json:"endTime"`
 	LunchCamelCase     *int   `json:"lunchDuration"`
+}
+
+type themePreferencePayload struct {
+	Theme string `json:"theme"`
 }
 
 func (p timeEntryPayload) startRaw() string {
@@ -261,6 +268,53 @@ func GetMonthlySummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
+}
+
+func GetThemePreference(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		HandleOptions(w, r)
+		return
+	}
+	SetCORSHeaders(w)
+
+	value, err := database.GetPreference(themePreferenceKey)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeJSON(w, http.StatusOK, themePreferencePayload{Theme: defaultThemeID})
+			return
+		}
+		handleDBError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, themePreferencePayload{Theme: value})
+}
+
+func UpdateThemePreference(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		HandleOptions(w, r)
+		return
+	}
+	SetCORSHeaders(w)
+
+	var payload themePreferencePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	theme := strings.TrimSpace(payload.Theme)
+	if theme == "" {
+		writeError(w, http.StatusBadRequest, "theme is required")
+		return
+	}
+
+	if err := database.SetPreference(themePreferenceKey, theme); err != nil {
+		handleDBError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, themePreferencePayload{Theme: theme})
 }
 
 // GetSummary keeps backward compatibility with the previous endpoint path.

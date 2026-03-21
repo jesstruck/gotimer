@@ -102,6 +102,18 @@ Backward-compatible alias:
   - Weekly by default
   - Monthly if `period=month`
 
+### Preferences
+- **GET `/api/preferences/theme`**: Read persisted UI theme preference.
+- **PUT `/api/preferences/theme`**: Save UI theme preference.
+
+Example request body:
+
+```json
+{
+  "theme": "blue-whale"
+}
+```
+
 ## Rounding Rule
 
 Rounding is applied to final worked duration only:
