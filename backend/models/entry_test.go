@@ -1,6 +1,9 @@
 package models
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestRoundWorkedMinutes(t *testing.T) {
 	tests := []struct {
@@ -26,5 +29,18 @@ func TestRoundWorkedMinutes(t *testing.T) {
 				t.Fatalf("RoundWorkedMinutes(%d) = %d, expected %d", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestWorkedMinutesReturnsZeroForOpenEntry(t *testing.T) {
+	entry := TimeEntry{
+		StartTime:     time.Date(2026, 3, 17, 9, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2026, 3, 17, 17, 0, 0, 0, time.UTC),
+		LunchDuration: 30,
+		IsOpen:        true,
+	}
+
+	if got := entry.WorkedMinutes(); got != 0 {
+		t.Fatalf("expected open entry worked minutes 0, got %d", got)
 	}
 }

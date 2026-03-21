@@ -28,7 +28,8 @@ The frontend proxies API calls to `http://localhost:8080` (see `package.json`).
   - end time
   - lunch minutes
   - start/stop buttons
-  - save button
+  - Stop is shown when a valid start time exists and end time is empty; otherwise Start is shown
+  - start/end auto-save when valid start time exists (open entries are supported until end time is set)
   - delete button
   - total display (when start/end exist)
 - Bottom-left totals block includes:

@@ -9,6 +9,7 @@ type TimeEntry struct {
 	ID            int       `json:"id"`
 	StartTime     time.Time `json:"start_time"`
 	EndTime       time.Time `json:"end_time"`
+	IsOpen        bool      `json:"is_open"`
 	LunchDuration int       `json:"lunch_duration"`
 	Source        string    `json:"source"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -19,6 +20,7 @@ type TimeEntryResponse struct {
 	ID                 int       `json:"id"`
 	StartTime          time.Time `json:"start_time"`
 	EndTime            time.Time `json:"end_time"`
+	IsOpen             bool      `json:"is_open"`
 	LunchDuration      int       `json:"lunch_duration"`
 	Source             string    `json:"source"`
 	CreatedAt          time.Time `json:"created_at"`
@@ -45,6 +47,10 @@ type SummaryResponse struct {
 }
 
 func (te TimeEntry) WorkedMinutes() int {
+	if te.IsOpen {
+		return 0
+	}
+
 	diffMinutes := int(math.Round(te.EndTime.Sub(te.StartTime).Minutes()))
 	worked := diffMinutes - te.LunchDuration
 	if worked < 0 {
@@ -78,6 +84,7 @@ func (te TimeEntry) ToResponse() TimeEntryResponse {
 		ID:                 te.ID,
 		StartTime:          te.StartTime,
 		EndTime:            te.EndTime,
+		IsOpen:             te.IsOpen,
 		LunchDuration:      te.LunchDuration,
 		Source:             te.Source,
 		CreatedAt:          te.CreatedAt,

@@ -149,8 +149,16 @@ func TestWeeklyAndMonthlySummaryWithRounding(t *testing.T) {
 		LunchDuration: 30,
 		Source:        "manual",
 	}
+	// Open entry should be persisted but excluded from summary totals.
+	e4 := &models.TimeEntry{
+		StartTime:     time.Date(2026, 3, 18, 9, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2026, 3, 18, 9, 0, 0, 0, time.UTC),
+		IsOpen:        true,
+		LunchDuration: 30,
+		Source:        "manual",
+	}
 
-	for _, entry := range []*models.TimeEntry{e1, e2, e3} {
+	for _, entry := range []*models.TimeEntry{e1, e2, e3, e4} {
 		if err := CreateTimeEntry(entry); err != nil {
 			t.Fatalf("CreateTimeEntry failed: %v", err)
 		}
@@ -177,5 +185,13 @@ func TestWeeklyAndMonthlySummaryWithRounding(t *testing.T) {
 	}
 	if monthly.TotalRoundedMins != 930 {
 		t.Fatalf("expected monthly rounded minutes=930, got %d", monthly.TotalRoundedMins)
+	}
+
+	persistedOpen, err := GetTimeEntryByID(e4.ID)
+	if err != nil {
+		t.Fatalf("GetTimeEntryByID failed: %v", err)
+	}
+	if !persistedOpen.IsOpen {
+		t.Fatalf("expected persisted open entry to remain open")
 	}
 }

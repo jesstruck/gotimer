@@ -41,6 +41,7 @@ func InitDB(dataSourceName string) error {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         start_time TEXT NOT NULL,
         end_time TEXT NOT NULL,
+        is_open INTEGER NOT NULL DEFAULT 0,
         lunch_duration INTEGER NOT NULL DEFAULT 0,
         source TEXT NOT NULL DEFAULT 'manual',
         created_at TEXT NOT NULL,
@@ -64,6 +65,9 @@ func InitDB(dataSourceName string) error {
 	if err := ensureColumn("time_entries", "source", "TEXT NOT NULL DEFAULT 'manual'"); err != nil {
 		return err
 	}
+	if err := ensureColumn("time_entries", "is_open", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if err := ensureColumn("time_entries", "created_at", "TEXT"); err != nil {
 		return err
 	}
@@ -77,6 +81,9 @@ func InitDB(dataSourceName string) error {
 		return err
 	}
 	if _, err := db.Exec(`UPDATE time_entries SET updated_at = COALESCE(NULLIF(updated_at, ''), created_at, datetime('now')) WHERE updated_at IS NULL OR updated_at = ''`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`UPDATE time_entries SET is_open = 0 WHERE is_open IS NULL`); err != nil {
 		return err
 	}
 
@@ -113,9 +120,10 @@ func CreateTimeEntry(entry *models.TimeEntry) error {
 	entry.UpdatedAt = now
 
 	res, err := db.Exec(
-		`INSERT INTO time_entries(start_time, end_time, lunch_duration, source, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO time_entries(start_time, end_time, is_open, lunch_duration, source, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)`,
 		formatTime(entry.StartTime),
 		formatTime(entry.EndTime),
+		boolToSQLiteInt(entry.IsOpen),
 		entry.LunchDuration,
 		entry.Source,
 		formatTime(entry.CreatedAt),
@@ -137,7 +145,7 @@ func GetTimeEntries() ([]models.TimeEntry, error) {
 		return []models.TimeEntry{}, errors.New("database not initialized")
 	}
 
-	rows, err := db.Query(`SELECT id, start_time, end_time, lunch_duration, source, created_at, updated_at FROM time_entries ORDER BY start_time DESC`)
+	rows, err := db.Query(`SELECT id, start_time, end_time, is_open, lunch_duration, source, created_at, updated_at FROM time_entries ORDER BY start_time DESC`)
 	if err != nil {
 		return []models.TimeEntry{}, err
 	}
@@ -163,16 +171,18 @@ func GetTimeEntryByID(id int) (models.TimeEntry, error) {
 		return models.TimeEntry{}, errors.New("database not initialized")
 	}
 
-	row := db.QueryRow(`SELECT id, start_time, end_time, lunch_duration, source, created_at, updated_at FROM time_entries WHERE id = ?`, id)
+	row := db.QueryRow(`SELECT id, start_time, end_time, is_open, lunch_duration, source, created_at, updated_at FROM time_entries WHERE id = ?`, id)
 
 	var (
 		entry                                    models.TimeEntry
+		openRaw                                  int
 		startRaw, endRaw, createdRaw, updatedRaw string
 	)
 	if err := row.Scan(
 		&entry.ID,
 		&startRaw,
 		&endRaw,
+		&openRaw,
 		&entry.LunchDuration,
 		&entry.Source,
 		&createdRaw,
@@ -203,6 +213,7 @@ func GetTimeEntryByID(id int) (models.TimeEntry, error) {
 
 	entry.StartTime = start
 	entry.EndTime = end
+	entry.IsOpen = openRaw == 1
 	entry.CreatedAt = created
 	entry.UpdatedAt = updated
 
@@ -229,9 +240,10 @@ func UpdateTimeEntry(entry *models.TimeEntry) error {
 	entry.UpdatedAt = time.Now().UTC()
 
 	res, err := db.Exec(
-		`UPDATE time_entries SET start_time = ?, end_time = ?, lunch_duration = ?, source = ?, updated_at = ? WHERE id = ?`,
+		`UPDATE time_entries SET start_time = ?, end_time = ?, is_open = ?, lunch_duration = ?, source = ?, updated_at = ? WHERE id = ?`,
 		formatTime(entry.StartTime),
 		formatTime(entry.EndTime),
+		boolToSQLiteInt(entry.IsOpen),
 		entry.LunchDuration,
 		entry.Source,
 		formatTime(entry.UpdatedAt),
@@ -349,9 +361,10 @@ func StopTimer(stoppedAt time.Time, defaultLunchDuration int) (models.TimeEntry,
 
 	now := time.Now().UTC()
 	res, err := tx.Exec(
-		`INSERT INTO time_entries(start_time, end_time, lunch_duration, source, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO time_entries(start_time, end_time, is_open, lunch_duration, source, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)`,
 		formatTime(startedAt),
 		formatTime(stoppedAt.UTC()),
+		0,
 		defaultLunchDuration,
 		"timer",
 		formatTime(now),
@@ -400,6 +413,9 @@ func buildSummary(period string, anchorDate time.Time, rangeStart, rangeEnd time
 	totalEntries := 0
 
 	for _, entry := range entries {
+		if entry.IsOpen {
+			continue
+		}
 		if entry.StartTime.Before(rangeStart) || entry.StartTime.After(rangeEnd) {
 			continue
 		}
@@ -490,6 +506,7 @@ func scanTimeEntry(scanner interface {
 }) (models.TimeEntry, error) {
 	var (
 		entry                                    models.TimeEntry
+		openRaw                                  int
 		startRaw, endRaw, createdRaw, updatedRaw string
 	)
 
@@ -497,6 +514,7 @@ func scanTimeEntry(scanner interface {
 		&entry.ID,
 		&startRaw,
 		&endRaw,
+		&openRaw,
 		&entry.LunchDuration,
 		&entry.Source,
 		&createdRaw,
@@ -524,12 +542,20 @@ func scanTimeEntry(scanner interface {
 
 	entry.StartTime = start
 	entry.EndTime = end
+	entry.IsOpen = openRaw == 1
 	entry.CreatedAt = created
 	entry.UpdatedAt = updated
 	if entry.Source == "" {
 		entry.Source = "manual"
 	}
 	return entry, nil
+}
+
+func boolToSQLiteInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 func formatTime(t time.Time) string {

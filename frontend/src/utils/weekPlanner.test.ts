@@ -12,6 +12,7 @@ function makeEntry(dateISO: string, roundedWorkedMinutes: number): TimeEntry {
     id: Number(`${Date.parse(dateISO)}`.slice(-6)),
     start_time: dateISO,
     end_time: dateISO,
+    is_open: false,
     lunch_duration: 30,
     source: "manual",
     created_at: dateISO,
@@ -19,6 +20,22 @@ function makeEntry(dateISO: string, roundedWorkedMinutes: number): TimeEntry {
     worked_minutes: roundedWorkedMinutes,
     rounded_worked_minutes: roundedWorkedMinutes,
     rounded_worked_hours: roundedWorkedMinutes / 60,
+  };
+}
+
+function makeOpenEntry(dateISO: string): TimeEntry {
+  return {
+    id: Number(`${Date.parse(dateISO)}`.slice(-6)) + 1,
+    start_time: dateISO,
+    end_time: dateISO,
+    is_open: true,
+    lunch_duration: 30,
+    source: "manual",
+    created_at: dateISO,
+    updated_at: dateISO,
+    worked_minutes: 0,
+    rounded_worked_minutes: 0,
+    rounded_worked_hours: 0,
   };
 }
 
@@ -62,6 +79,7 @@ describe("weekPlanner utilities", () => {
     const entries = [
       makeEntry("2026-03-03T09:00:00Z", 480), // week 10
       makeEntry("2026-03-31T09:00:00Z", 240), // week 14
+      makeOpenEntry("2026-03-18T09:00:00Z"), // open entry should not contribute
       makeEntry("2026-04-01T09:00:00Z", 300), // outside March
     ];
 

@@ -281,22 +281,28 @@ func payloadToTimeEntry(payload timeEntryPayload, source string) (models.TimeEnt
 
 	startRaw := payload.startRaw()
 	endRaw := payload.endRaw()
-	if startRaw == "" || endRaw == "" {
-		return models.TimeEntry{}, errors.New("start_time and end_time are required")
+	if startRaw == "" {
+		return models.TimeEntry{}, errors.New("start_time is required")
 	}
 
 	startTime, err := parseFlexibleTime(startRaw, dateRef)
 	if err != nil {
 		return models.TimeEntry{}, fmt.Errorf("invalid start_time: %w", err)
 	}
-	endTime, err := parseFlexibleTime(endRaw, dateRef)
-	if err != nil {
-		return models.TimeEntry{}, fmt.Errorf("invalid end_time: %w", err)
+
+	isOpen := endRaw == ""
+	endTime := startTime
+	if !isOpen {
+		endTime, err = parseFlexibleTime(endRaw, dateRef)
+		if err != nil {
+			return models.TimeEntry{}, fmt.Errorf("invalid end_time: %w", err)
+		}
 	}
 
 	return models.TimeEntry{
 		StartTime:     startTime.UTC(),
 		EndTime:       endTime.UTC(),
+		IsOpen:        isOpen,
 		LunchDuration: payload.lunchMinutes(0),
 		Source:        source,
 	}, nil

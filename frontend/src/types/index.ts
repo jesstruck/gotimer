@@ -2,6 +2,7 @@ export interface TimeEntry {
   id: number;
   start_time: string;
   end_time: string;
+  is_open: boolean;
   lunch_duration: number;
   source: "manual" | "timer" | string;
   created_at: string;
@@ -30,6 +31,6 @@ export interface SummaryResponse {
 export interface TimeEntryPayload {
   date: string;
   start_time: string;
-  end_time: string;
+  end_time?: string;
   lunch_duration: number;
 }
